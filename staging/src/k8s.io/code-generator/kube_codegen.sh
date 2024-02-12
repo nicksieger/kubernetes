@@ -59,12 +59,16 @@ function kube::codegen::internal::git_grep() {
 #     An optional list (this flag may be specified multiple times) of "extra"
 #     directories to consider during conversion generation.
 #
+#   --trim-path-prefix <string>
+#     Trim the specified prefix from --input-pkg-root when generating files.
+#
 function kube::codegen::gen_helpers() {
     local in_pkg_root=""
     local out_base="" # gengo needs the output dir must be $out_base/$out_pkg_root
     local boilerplate="${KUBE_CODEGEN_ROOT}/hack/boilerplate.go.txt"
     local v="${KUBE_VERBOSE:-0}"
     local extra_peers=()
+    local trim_path_prefix=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -82,6 +86,10 @@ function kube::codegen::gen_helpers() {
                 ;;
             "--extra-peer-dir")
                 extra_peers+=("$2")
+                shift 2
+                ;;
+            "--trim-path-prefix")
+                trim_path_prefix="$2"
                 shift 2
                 ;;
             *)
@@ -116,7 +124,8 @@ function kube::codegen::gen_helpers() {
     gobin="${GOBIN:-$(go env GOPATH)/bin}"
 
     # These tools all assume out-dir == in-dir.
-    root="${out_base}/${in_pkg_root}"
+    trimmed_pkg_root="${in_pkg_root#${trim_path_prefix}}"
+    root="${out_base}/${trimmed_pkg_root}"
     mkdir -p "${root}"
     root="$(cd "${root}" && pwd -P)"
 
@@ -151,6 +160,7 @@ function kube::codegen::gen_helpers() {
             --output-file-base zz_generated.deepcopy \
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             "${input_args[@]}"
     fi
 
@@ -185,6 +195,7 @@ function kube::codegen::gen_helpers() {
             --output-file-base zz_generated.defaults \
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             "${input_args[@]}"
     fi
 
@@ -223,6 +234,7 @@ function kube::codegen::gen_helpers() {
             --output-file-base zz_generated.conversion \
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             "${extra_peer_args[@]:+"${extra_peer_args[@]}"}" \
             "${input_args[@]}"
     fi
@@ -263,6 +275,10 @@ function kube::codegen::gen_helpers() {
 #   --boilerplate <string = path_to_kube_codegen_boilerplate>
 #     An optional override for the header file to insert into generated files.
 #
+#   --trim-path-prefix <string>
+#     Trim the specified prefix from --input-pkg-root and --output-pkg-root when
+#     generating files.
+#
 function kube::codegen::gen_openapi() {
     local in_pkg_root=""
     local out_pkg_root=""
@@ -273,6 +289,7 @@ function kube::codegen::gen_openapi() {
     local update_report=""
     local boilerplate="${KUBE_CODEGEN_ROOT}/hack/boilerplate.go.txt"
     local v="${KUBE_VERBOSE:-0}"
+    local trim_path_prefix=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -307,6 +324,9 @@ function kube::codegen::gen_openapi() {
             "--boilerplate")
                 boilerplate="$2"
                 shift 2
+                ;;
+            "--trim-path-prefix")
+                trim_path_prefix="$2"
                 ;;
             *)
                 echo "unknown argument: $1" >&2
@@ -348,7 +368,8 @@ function kube::codegen::gen_openapi() {
     gobin="${GOBIN:-$(go env GOPATH)/bin}"
 
     # These tools all assume out-dir == in-dir.
-    root="${out_base}/${in_pkg_root}"
+    trimmed_pkg_root="${in_pkg_root#${trim_path_prefix}}"
+    root="${out_base}/${trimmed_pkg_root}"
     mkdir -p "${root}"
     root="$(cd "${root}" && pwd -P)"
 
@@ -382,6 +403,7 @@ function kube::codegen::gen_openapi() {
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
             --output-package "${out_pkg_root}/${openapi_subdir}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             --report-filename "${new_report}" \
             --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1" \
             --input-dirs "k8s.io/apimachinery/pkg/runtime" \
@@ -445,6 +467,10 @@ function kube::codegen::gen_openapi() {
 #   --informers-name <string = "informers">
 #     An optional override for the leaf name of the generated "informers" directory.
 #
+#   --trim-path-prefix <string>
+#     Trim the specified prefix from --input-pkg-root and --output-pkg-root when generating
+#     files.
+#
 function kube::codegen::gen_client() {
     local in_pkg_root=""
     local one_input_api=""
@@ -459,6 +485,7 @@ function kube::codegen::gen_client() {
     local informers_subdir="informers"
     local boilerplate="${KUBE_CODEGEN_ROOT}/hack/boilerplate.go.txt"
     local v="${KUBE_VERBOSE:-0}"
+    local trim_path_prefix=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -510,6 +537,10 @@ function kube::codegen::gen_client() {
                 informers_subdir="$2"
                 shift 2
                 ;;
+            "--trim-path-prefix")
+                trim_path_prefix="$2"
+                shift 2
+                ;;
             *)
                 echo "unknown argument: $1" >&2
                 return 1
@@ -546,10 +577,12 @@ function kube::codegen::gen_client() {
     # Go installs in $GOBIN if defined, and $GOPATH/bin otherwise
     gobin="${GOBIN:-$(go env GOPATH)/bin}"
 
-    in_root="${out_base}/${in_pkg_root}"
+    trimmed_pkg_root="${in_pkg_root#${trim_path_prefix}}"
+    in_root="${out_base}/${trimmed_pkg_root}"
     mkdir -p "${in_root}"
     in_root="$(cd "${in_root}" && pwd -P)"
-    out_root="${out_base}/${out_pkg_root}"
+    trimmed_pkg_root="${out_pkg_root#${trim_path_prefix}}"
+    out_root="${out_base}/${trimmed_pkg_root}"
     mkdir -p "${out_root}"
     out_root="$(cd "${out_root}" && pwd -P)"
 
@@ -599,6 +632,7 @@ function kube::codegen::gen_client() {
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
             --output-package "${out_pkg_root}/${applyconfig_subdir}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             "${inputs[@]}"
     fi
 
@@ -621,6 +655,7 @@ function kube::codegen::gen_client() {
         --input-base "${in_pkg_root}" \
         --output-base "${out_base}" \
         --output-package "${out_pkg_root}/${clientset_subdir}" \
+        --trim-path-prefix "${trim_path_prefix}" \
         --apply-configuration-package "${applyconfig_pkg}" \
         "${inputs[@]}"
 
@@ -642,6 +677,7 @@ function kube::codegen::gen_client() {
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
             --output-package "${out_pkg_root}/${listers_subdir}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             "${inputs[@]}"
 
         echo "Generating informer code for ${#input_pkgs[@]} targets"
@@ -661,6 +697,7 @@ function kube::codegen::gen_client() {
             --go-header-file "${boilerplate}" \
             --output-base "${out_base}" \
             --output-package "${out_pkg_root}/${informers_subdir}" \
+            --trim-path-prefix "${trim_path_prefix}" \
             --versioned-clientset-package "${out_pkg_root}/${clientset_subdir}/${clientset_versioned_name}" \
             --listers-package "${out_pkg_root}/${listers_subdir}" \
             "${inputs[@]}"
